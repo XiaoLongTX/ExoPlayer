@@ -39,7 +39,7 @@ import com.google.android.exoplayer2.source.hls.playlist.HlsMasterPlaylist;
 import com.google.android.exoplayer2.source.hls.playlist.HlsMasterPlaylist.Rendition;
 import com.google.android.exoplayer2.source.hls.playlist.HlsMasterPlaylist.Variant;
 import com.google.android.exoplayer2.source.hls.playlist.HlsPlaylistTracker;
-import com.google.android.exoplayer2.trackselection.TrackSelection;
+import com.google.android.exoplayer2.trackselection.ExoTrackSelection;
 import com.google.android.exoplayer2.upstream.Allocator;
 import com.google.android.exoplayer2.upstream.DataSource;
 import com.google.android.exoplayer2.upstream.LoadErrorHandlingPolicy;
@@ -177,7 +177,7 @@ public final class HlsMediaPeriod implements MediaPeriod, HlsSampleStreamWrapper
   // null URLs, this method must be updated to calculate stream keys that are compatible with those
   // that may already be persisted for offline.
   @Override
-  public List<StreamKey> getStreamKeys(List<TrackSelection> trackSelections) {
+  public List<StreamKey> getStreamKeys(List<ExoTrackSelection> trackSelections) {
     // See HlsMasterPlaylist.copy for interpretation of StreamKeys.
     HlsMasterPlaylist masterPlaylist = Assertions.checkNotNull(playlistTracker.getMasterPlaylist());
     boolean hasVariants = !masterPlaylist.variants.isEmpty();
@@ -202,7 +202,7 @@ public final class HlsMediaPeriod implements MediaPeriod, HlsSampleStreamWrapper
     List<StreamKey> streamKeys = new ArrayList<>();
     boolean needsPrimaryTrackGroupSelection = false;
     boolean hasPrimaryTrackGroupSelection = false;
-    for (TrackSelection trackSelection : trackSelections) {
+    for (ExoTrackSelection trackSelection : trackSelections) {
       TrackGroup trackSelectionGroup = trackSelection.getTrackGroup();
       int mainWrapperTrackGroupIndex = mainWrapperTrackGroups.indexOf(trackSelectionGroup);
       if (mainWrapperTrackGroupIndex != C.INDEX_UNSET) {
@@ -258,7 +258,7 @@ public final class HlsMediaPeriod implements MediaPeriod, HlsSampleStreamWrapper
 
   @Override
   public long selectTracks(
-      @NullableType TrackSelection[] selections,
+      @NullableType ExoTrackSelection[] selections,
       boolean[] mayRetainStreamFlags,
       @NullableType SampleStream[] streams,
       boolean[] streamResetFlags,
@@ -286,7 +286,7 @@ public final class HlsMediaPeriod implements MediaPeriod, HlsSampleStreamWrapper
     // Select tracks for each child, copying the resulting streams back into a new streams array.
     SampleStream[] newStreams = new SampleStream[selections.length];
     @NullableType SampleStream[] childStreams = new SampleStream[selections.length];
-    @NullableType TrackSelection[] childSelections = new TrackSelection[selections.length];
+    @NullableType ExoTrackSelection[] childSelections = new ExoTrackSelection[selections.length];
     int newEnabledSampleStreamWrapperCount = 0;
     HlsSampleStreamWrapper[] newEnabledSampleStreamWrappers =
         new HlsSampleStreamWrapper[sampleStreamWrappers.length];
@@ -445,6 +445,9 @@ public final class HlsMediaPeriod implements MediaPeriod, HlsSampleStreamWrapper
 
   @Override
   public void onPlaylistChanged() {
+    for (HlsSampleStreamWrapper streamWrapper : sampleStreamWrappers) {
+      streamWrapper.onPlaylistUpdated();
+    }
     callback.onContinueLoadingRequested(this);
   }
 
@@ -603,6 +606,12 @@ public final class HlsMediaPeriod implements MediaPeriod, HlsSampleStreamWrapper
       }
     }
     String codecs = selectedPlaylistFormats[0].codecs;
+    int numberOfVideoCodecs = Util.getCodecCountOfType(codecs, C.TRACK_TYPE_VIDEO);
+    int numberOfAudioCodecs = Util.getCodecCountOfType(codecs, C.TRACK_TYPE_AUDIO);
+    boolean codecsStringAllowsChunklessPreparation =
+        numberOfAudioCodecs <= 1
+            && numberOfVideoCodecs <= 1
+            && numberOfAudioCodecs + numberOfVideoCodecs > 0;
     HlsSampleStreamWrapper sampleStreamWrapper =
         buildSampleStreamWrapper(
             C.TRACK_TYPE_DEFAULT,
@@ -614,18 +623,16 @@ public final class HlsMediaPeriod implements MediaPeriod, HlsSampleStreamWrapper
             positionUs);
     sampleStreamWrappers.add(sampleStreamWrapper);
     manifestUrlIndicesPerWrapper.add(selectedVariantIndices);
-    if (allowChunklessPreparation && codecs != null) {
-      boolean variantsContainVideoCodecs = Util.getCodecsOfType(codecs, C.TRACK_TYPE_VIDEO) != null;
-      boolean variantsContainAudioCodecs = Util.getCodecsOfType(codecs, C.TRACK_TYPE_AUDIO) != null;
+    if (allowChunklessPreparation && codecsStringAllowsChunklessPreparation) {
       List<TrackGroup> muxedTrackGroups = new ArrayList<>();
-      if (variantsContainVideoCodecs) {
+      if (numberOfVideoCodecs > 0) {
         Format[] videoFormats = new Format[selectedVariantsCount];
         for (int i = 0; i < videoFormats.length; i++) {
           videoFormats[i] = deriveVideoFormat(selectedPlaylistFormats[i]);
         }
         muxedTrackGroups.add(new TrackGroup(videoFormats));
 
-        if (variantsContainAudioCodecs
+        if (numberOfAudioCodecs > 0
             && (masterPlaylist.muxedAudioFormat != null || masterPlaylist.audios.isEmpty())) {
           muxedTrackGroups.add(
               new TrackGroup(
@@ -640,7 +647,7 @@ public final class HlsMediaPeriod implements MediaPeriod, HlsSampleStreamWrapper
             muxedTrackGroups.add(new TrackGroup(ccFormats.get(i)));
           }
         }
-      } else if (variantsContainAudioCodecs) {
+      } else /* numberOfAudioCodecs > 0 */ {
         // Variants only contain audio.
         Format[] audioFormats = new Format[selectedVariantsCount];
         for (int i = 0; i < audioFormats.length; i++) {
@@ -651,9 +658,6 @@ public final class HlsMediaPeriod implements MediaPeriod, HlsSampleStreamWrapper
                   /* isPrimaryTrackInVariant= */ true);
         }
         muxedTrackGroups.add(new TrackGroup(audioFormats));
-      } else {
-        // Variants contain codecs but no video or audio entries could be identified.
-        throw new IllegalArgumentException("Unexpected codecs attribute: " + codecs);
       }
 
       TrackGroup id3TrackGroup =
@@ -693,7 +697,7 @@ public final class HlsMediaPeriod implements MediaPeriod, HlsSampleStreamWrapper
         continue;
       }
 
-      boolean renditionsHaveCodecs = true;
+      boolean codecStringsAllowChunklessPreparation = true;
       scratchPlaylistUrls.clear();
       scratchPlaylistFormats.clear();
       scratchIndicesList.clear();
@@ -704,7 +708,8 @@ public final class HlsMediaPeriod implements MediaPeriod, HlsSampleStreamWrapper
           scratchIndicesList.add(renditionIndex);
           scratchPlaylistUrls.add(rendition.url);
           scratchPlaylistFormats.add(rendition.format);
-          renditionsHaveCodecs &= rendition.format.codecs != null;
+          codecStringsAllowChunklessPreparation &=
+              Util.getCodecCountOfType(rendition.format.codecs, C.TRACK_TYPE_AUDIO) == 1;
         }
       }
 
@@ -720,7 +725,7 @@ public final class HlsMediaPeriod implements MediaPeriod, HlsSampleStreamWrapper
       manifestUrlsIndicesPerWrapper.add(Ints.toArray(scratchIndicesList));
       sampleStreamWrappers.add(sampleStreamWrapper);
 
-      if (allowChunklessPreparation && renditionsHaveCodecs) {
+      if (allowChunklessPreparation && codecStringsAllowChunklessPreparation) {
         Format[] renditionFormats = scratchPlaylistFormats.toArray(new Format[0]);
         sampleStreamWrapper.prepareWithMasterPlaylistInfo(
             new TrackGroup[] {new TrackGroup(renditionFormats)}, /* primaryTrackGroupIndex= */ 0);

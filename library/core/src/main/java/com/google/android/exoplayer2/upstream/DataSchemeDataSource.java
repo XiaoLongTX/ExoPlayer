@@ -59,7 +59,7 @@ public final class DataSchemeDataSource extends BaseDataSource {
     String dataString = uriParts[1];
     if (uriParts[0].contains(";base64")) {
       try {
-        data = Base64.decode(dataString, 0);
+        data = Base64.decode(dataString, /* flags= */ Base64.DEFAULT);
       } catch (IllegalArgumentException e) {
         throw new ParserException("Error while parsing Base64 encoded string: " + dataString, e);
       }

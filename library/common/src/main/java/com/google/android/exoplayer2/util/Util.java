@@ -17,6 +17,7 @@ package com.google.android.exoplayer2.util;
 
 import static android.content.Context.UI_MODE_SERVICE;
 import static com.google.android.exoplayer2.util.Assertions.checkNotNull;
+import static java.lang.Math.abs;
 import static java.lang.Math.max;
 import static java.lang.Math.min;
 
@@ -47,6 +48,8 @@ import android.os.SystemClock;
 import android.security.NetworkSecurityPolicy;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
+import android.util.Base64;
+import android.util.SparseLongArray;
 import android.view.Display;
 import android.view.SurfaceView;
 import android.view.WindowManager;
@@ -80,6 +83,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.MissingResourceException;
+import java.util.NoSuchElementException;
 import java.util.TimeZone;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -87,6 +91,7 @@ import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.DataFormatException;
+import java.util.zip.GZIPOutputStream;
 import java.util.zip.Inflater;
 import org.checkerframework.checker.initialization.qual.UnknownInitialization;
 import org.checkerframework.checker.nullness.compatqual.NullableType;
@@ -102,7 +107,10 @@ public final class Util {
    * Like {@link android.os.Build.VERSION#SDK_INT}, but in a place where it can be conveniently
    * overridden for local testing.
    */
-  public static final int SDK_INT = "R".equals(Build.VERSION.CODENAME) ? 30 : Build.VERSION.SDK_INT;
+  public static final int SDK_INT =
+      "S".equals(Build.VERSION.CODENAME)
+          ? 31
+          : "R".equals(Build.VERSION.CODENAME) ? 30 : Build.VERSION.SDK_INT;
 
   /**
    * Like {@link Build#DEVICE}, but in a place where it can be conveniently overridden for local
@@ -503,6 +511,10 @@ public final class Util {
    *     run. {@code false} otherwise.
    */
   public static boolean postOrRun(Handler handler, Runnable runnable) {
+    Looper looper = handler.getLooper();
+    if (!looper.getThread().isAlive()) {
+      return false;
+    }
     if (handler.getLooper() == Looper.myLooper()) {
       runnable.run();
       return true;
@@ -528,6 +540,54 @@ public final class Util {
    */
   public static ExecutorService newSingleThreadExecutor(final String threadName) {
     return Executors.newSingleThreadExecutor(runnable -> new Thread(runnable, threadName));
+  }
+
+  /**
+   * Reads data from the specified opened {@link DataSource} until it ends, and returns a byte array
+   * containing the read data.
+   *
+   * @param dataSource The source from which to read.
+   * @return The concatenation of all read data.
+   * @throws IOException If an error occurs reading from the source.
+   */
+  public static byte[] readToEnd(DataSource dataSource) throws IOException {
+    byte[] data = new byte[1024];
+    int position = 0;
+    int bytesRead = 0;
+    while (bytesRead != C.RESULT_END_OF_INPUT) {
+      if (position == data.length) {
+        data = Arrays.copyOf(data, data.length * 2);
+      }
+      bytesRead = dataSource.read(data, position, data.length - position);
+      if (bytesRead != C.RESULT_END_OF_INPUT) {
+        position += bytesRead;
+      }
+    }
+    return Arrays.copyOf(data, position);
+  }
+
+  /**
+   * Reads {@code length} bytes from the specified opened {@link DataSource}, and returns a byte
+   * array containing the read data.
+   *
+   * @param dataSource The source from which to read.
+   * @return The read data.
+   * @throws IOException If an error occurs reading from the source.
+   * @throws IllegalStateException If the end of the source was reached before {@code length} bytes
+   *     could be read.
+   */
+  public static byte[] readExactly(DataSource dataSource, int length) throws IOException {
+    byte[] data = new byte[length];
+    int position = 0;
+    while (position < length) {
+      int bytesRead = dataSource.read(data, position, data.length - position);
+      if (bytesRead == C.RESULT_END_OF_INPUT) {
+        throw new IllegalStateException(
+            "Not enough data could be read: " + position + " < " + length);
+      }
+      position += bytesRead;
+    }
+    return data;
   }
 
   /**
@@ -1117,6 +1177,25 @@ public final class Util {
   }
 
   /**
+   * Returns the minimum value in the given {@link SparseLongArray}.
+   *
+   * @param sparseLongArray The {@link SparseLongArray}.
+   * @return The minimum value.
+   * @throws NoSuchElementException If the array is empty.
+   */
+  @RequiresApi(18)
+  public static long minValue(SparseLongArray sparseLongArray) {
+    if (sparseLongArray.size() == 0) {
+      throw new NoSuchElementException();
+    }
+    long min = Long.MAX_VALUE;
+    for (int i = 0; i < sparseLongArray.size(); i++) {
+      min = min(min, sparseLongArray.valueAt(i));
+    }
+    return min;
+  }
+
+  /**
    * Parses an xs:duration attribute value, returning the parsed duration in milliseconds.
    *
    * @param value The attribute value to decode.
@@ -1285,7 +1364,7 @@ public final class Util {
    * Returns the duration of media that will elapse in {@code playoutDuration}.
    *
    * @param playoutDuration The duration to scale.
-   * @param speed The playback speed.
+   * @param speed The factor by which playback is sped up.
    * @return The scaled duration, in the same units as {@code playoutDuration}.
    */
   public static long getMediaDurationForPlayoutDuration(long playoutDuration, float speed) {
@@ -1433,6 +1512,18 @@ public final class Util {
     }
     return applicationName + "/" + versionName + " (Linux;Android " + Build.VERSION.RELEASE
         + ") " + ExoPlayerLibraryInfo.VERSION_SLASHY;
+  }
+
+  /** Returns the number of codec strings in {@code codecs} whose type matches {@code trackType}. */
+  public static int getCodecCountOfType(@Nullable String codecs, int trackType) {
+    String[] codecArray = splitCodecs(codecs);
+    int count = 0;
+    for (String codec : codecArray) {
+      if (trackType == MimeTypes.getTrackTypeOfCodec(codec)) {
+        count++;
+      }
+    }
+    return count;
   }
 
   /**
@@ -1627,7 +1718,6 @@ public final class Util {
         return C.USAGE_ASSISTANCE_SONIFICATION;
       case C.STREAM_TYPE_VOICE_CALL:
         return C.USAGE_VOICE_COMMUNICATION;
-      case C.STREAM_TYPE_USE_DEFAULT:
       case C.STREAM_TYPE_MUSIC:
       default:
         return C.USAGE_MEDIA;
@@ -1648,7 +1738,6 @@ public final class Util {
         return C.CONTENT_TYPE_SONIFICATION;
       case C.STREAM_TYPE_VOICE_CALL:
         return C.CONTENT_TYPE_SPEECH;
-      case C.STREAM_TYPE_USE_DEFAULT:
       case C.STREAM_TYPE_MUSIC:
       default:
         return C.CONTENT_TYPE_MUSIC;
@@ -1844,13 +1933,16 @@ public final class Util {
     if (timeMs == C.TIME_UNSET) {
       timeMs = 0;
     }
+    String prefix = timeMs < 0 ? "-" : "";
+    timeMs = abs(timeMs);
     long totalSeconds = (timeMs + 500) / 1000;
     long seconds = totalSeconds % 60;
     long minutes = (totalSeconds / 60) % 60;
     long hours = totalSeconds / 3600;
     builder.setLength(0);
-    return hours > 0 ? formatter.format("%d:%02d:%02d", hours, minutes, seconds).toString()
-        : formatter.format("%02d:%02d", minutes, seconds).toString();
+    return hours > 0
+        ? formatter.format("%s%d:%02d:%02d", prefix, hours, minutes, seconds).toString()
+        : formatter.format("%s%02d:%02d", prefix, minutes, seconds).toString();
   }
 
   /**
@@ -1952,6 +2044,12 @@ public final class Util {
     return builder.toString();
   }
 
+  /** Returns a data URI with the specified MIME type and data. */
+  public static Uri getDataUriForString(String mimeType, String data) {
+    return Uri.parse(
+        "data:" + mimeType + ";base64," + Base64.encodeToString(data.getBytes(), Base64.NO_WRAP));
+  }
+
   /**
    * A hacky method that always throws {@code t} even if {@code t} is a checked exception,
    * and is not declared to be thrown.
@@ -1986,7 +2084,7 @@ public final class Util {
 
   /** Creates a new empty file in the directory returned by {@link Context#getCacheDir()}. */
   public static File createTempFile(Context context, String prefix) throws IOException {
-    return File.createTempFile(prefix, null, context.getCacheDir());
+    return File.createTempFile(prefix, null, checkNotNull(context.getCacheDir()));
   }
 
   /**
@@ -2022,6 +2120,17 @@ public final class Util {
       initialValue = CRC8_BYTES_MSBF[initialValue ^ (bytes[i] & 0xFF)];
     }
     return initialValue;
+  }
+
+  /** Compresses {@code input} using gzip and returns the result in a newly allocated byte array. */
+  public static byte[] gzip(byte[] input) {
+    ByteArrayOutputStream output = new ByteArrayOutputStream();
+    try (GZIPOutputStream os = new GZIPOutputStream(output)) {
+      os.write(input);
+    } catch (IOException e) {
+      throw new AssertionError(e);
+    }
+    return output.toByteArray();
   }
 
   /**
@@ -2080,7 +2189,7 @@ public final class Util {
         return getMobileNetworkType(networkInfo);
       case ConnectivityManager.TYPE_ETHERNET:
         return C.NETWORK_TYPE_ETHERNET;
-      default: // VPN, Bluetooth, Dummy.
+      default:
         return C.NETWORK_TYPE_OTHER;
     }
   }
@@ -2136,9 +2245,8 @@ public final class Util {
     if (input.bytesLeft() <= 0) {
       return false;
     }
-    byte[] outputData = output.getData();
-    if (outputData.length < input.bytesLeft()) {
-      outputData = new byte[2 * input.bytesLeft()];
+    if (output.capacity() < input.bytesLeft()) {
+      output.ensureCapacity(2 * input.bytesLeft());
     }
     if (inflater == null) {
       inflater = new Inflater();
@@ -2147,16 +2255,17 @@ public final class Util {
     try {
       int outputSize = 0;
       while (true) {
-        outputSize += inflater.inflate(outputData, outputSize, outputData.length - outputSize);
+        outputSize +=
+            inflater.inflate(output.getData(), outputSize, output.capacity() - outputSize);
         if (inflater.finished()) {
-          output.reset(outputData, outputSize);
+          output.setLimit(outputSize);
           return true;
         }
         if (inflater.needsDictionary() || inflater.needsInput()) {
           return false;
         }
-        if (outputSize == outputData.length) {
-          outputData = Arrays.copyOf(outputData, outputData.length * 2);
+        if (outputSize == output.capacity()) {
+          output.ensureCapacity(output.capacity() * 2);
         }
       }
     } catch (DataFormatException e) {
@@ -2511,7 +2620,7 @@ public final class Util {
         "hsn", "zh-hsn"
       };
 
-  // Legacy ("grandfathered") tags, replaced by modern equivalents (including macrolanguage)
+  // Legacy tags that have been replaced by modern equivalents (including macrolanguage)
   // See https://www.iana.org/assignments/language-subtag-registry/language-subtag-registry.
   private static final String[] isoLegacyTagReplacements =
       new String[] {

@@ -15,6 +15,7 @@
  */
 package com.google.android.exoplayer2.drm;
 
+import static com.google.android.exoplayer2.util.Assertions.checkNotNull;
 import static com.google.common.truth.Truth.assertThat;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
@@ -24,7 +25,6 @@ import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.Format;
 import com.google.android.exoplayer2.testutil.FakeExoMediaDrm;
 import com.google.android.exoplayer2.testutil.TestUtil;
-import com.google.android.exoplayer2.util.Assertions;
 import com.google.android.exoplayer2.util.MimeTypes;
 import com.google.common.collect.ImmutableList;
 import java.util.UUID;
@@ -61,10 +61,11 @@ public class DefaultDrmSessionManagerTest {
             .build(/* mediaDrmCallback= */ licenseServer);
     drmSessionManager.prepare();
     DrmSession drmSession =
-        drmSessionManager.acquireSession(
-            /* playbackLooper= */ Assertions.checkNotNull(Looper.myLooper()),
-            /* eventDispatcher= */ null,
-            FORMAT_WITH_DRM_INIT_DATA);
+        checkNotNull(
+            drmSessionManager.acquireSession(
+                /* playbackLooper= */ checkNotNull(Looper.myLooper()),
+                /* eventDispatcher= */ null,
+                FORMAT_WITH_DRM_INIT_DATA));
     waitForOpenedWithKeys(drmSession);
 
     assertThat(drmSession.getState()).isEqualTo(DrmSession.STATE_OPENED_WITH_KEYS);
@@ -84,10 +85,11 @@ public class DefaultDrmSessionManagerTest {
 
     drmSessionManager.prepare();
     DrmSession drmSession =
-        drmSessionManager.acquireSession(
-            /* playbackLooper= */ Assertions.checkNotNull(Looper.myLooper()),
-            /* eventDispatcher= */ null,
-            FORMAT_WITH_DRM_INIT_DATA);
+        checkNotNull(
+            drmSessionManager.acquireSession(
+                /* playbackLooper= */ checkNotNull(Looper.myLooper()),
+                /* eventDispatcher= */ null,
+                FORMAT_WITH_DRM_INIT_DATA));
     waitForOpenedWithKeys(drmSession);
 
     assertThat(drmSession.getState()).isEqualTo(DrmSession.STATE_OPENED_WITH_KEYS);
@@ -109,10 +111,11 @@ public class DefaultDrmSessionManagerTest {
 
     drmSessionManager.prepare();
     DrmSession drmSession =
-        drmSessionManager.acquireSession(
-            /* playbackLooper= */ Assertions.checkNotNull(Looper.myLooper()),
-            /* eventDispatcher= */ null,
-            FORMAT_WITH_DRM_INIT_DATA);
+        checkNotNull(
+            drmSessionManager.acquireSession(
+                /* playbackLooper= */ checkNotNull(Looper.myLooper()),
+                /* eventDispatcher= */ null,
+                FORMAT_WITH_DRM_INIT_DATA));
     waitForOpenedWithKeys(drmSession);
     drmSession.release(/* eventDispatcher= */ null);
 
@@ -131,16 +134,43 @@ public class DefaultDrmSessionManagerTest {
 
     drmSessionManager.prepare();
     DrmSession drmSession =
-        drmSessionManager.acquireSession(
-            /* playbackLooper= */ Assertions.checkNotNull(Looper.myLooper()),
-            /* eventDispatcher= */ null,
-            FORMAT_WITH_DRM_INIT_DATA);
+        checkNotNull(
+            drmSessionManager.acquireSession(
+                /* playbackLooper= */ checkNotNull(Looper.myLooper()),
+                /* eventDispatcher= */ null,
+                FORMAT_WITH_DRM_INIT_DATA));
     waitForOpenedWithKeys(drmSession);
     drmSession.release(/* eventDispatcher= */ null);
 
     assertThat(drmSession.getState()).isEqualTo(DrmSession.STATE_OPENED_WITH_KEYS);
     drmSessionManager.release();
     assertThat(drmSession.getState()).isEqualTo(DrmSession.STATE_RELEASED);
+  }
+
+  @Test(timeout = 10_000)
+  public void managerRelease_keepaliveDisabled_doesntReleaseAnySessions() throws Exception {
+    FakeExoMediaDrm.LicenseServer licenseServer =
+        FakeExoMediaDrm.LicenseServer.allowingSchemeDatas(DRM_SCHEME_DATAS);
+    DrmSessionManager drmSessionManager =
+        new DefaultDrmSessionManager.Builder()
+            .setUuidAndExoMediaDrmProvider(DRM_SCHEME_UUID, uuid -> new FakeExoMediaDrm())
+            .setSessionKeepaliveMs(C.TIME_UNSET)
+            .build(/* mediaDrmCallback= */ licenseServer);
+
+    drmSessionManager.prepare();
+    DrmSession drmSession =
+        checkNotNull(
+            drmSessionManager.acquireSession(
+                /* playbackLooper= */ checkNotNull(Looper.myLooper()),
+                /* eventDispatcher= */ null,
+                FORMAT_WITH_DRM_INIT_DATA));
+    waitForOpenedWithKeys(drmSession);
+    assertThat(drmSession.getState()).isEqualTo(DrmSession.STATE_OPENED_WITH_KEYS);
+
+    // Release the manager, the session should still be open (though it's unusable because
+    // the underlying ExoMediaDrm is released).
+    drmSessionManager.release();
+    assertThat(drmSession.getState()).isEqualTo(DrmSession.STATE_OPENED_WITH_KEYS);
   }
 
   @Test(timeout = 10_000)
@@ -161,10 +191,11 @@ public class DefaultDrmSessionManagerTest {
 
     drmSessionManager.prepare();
     DrmSession firstDrmSession =
-        drmSessionManager.acquireSession(
-            /* playbackLooper= */ Assertions.checkNotNull(Looper.myLooper()),
-            /* eventDispatcher= */ null,
-            FORMAT_WITH_DRM_INIT_DATA);
+        checkNotNull(
+            drmSessionManager.acquireSession(
+                /* playbackLooper= */ checkNotNull(Looper.myLooper()),
+                /* eventDispatcher= */ null,
+                FORMAT_WITH_DRM_INIT_DATA));
     waitForOpenedWithKeys(firstDrmSession);
     firstDrmSession.release(/* eventDispatcher= */ null);
 
@@ -172,10 +203,11 @@ public class DefaultDrmSessionManagerTest {
     // drmSessionManager's internal reference.
     assertThat(firstDrmSession.getState()).isEqualTo(DrmSession.STATE_OPENED_WITH_KEYS);
     DrmSession secondDrmSession =
-        drmSessionManager.acquireSession(
-            /* playbackLooper= */ Assertions.checkNotNull(Looper.myLooper()),
-            /* eventDispatcher= */ null,
-            secondFormatWithDrmInitData);
+        checkNotNull(
+            drmSessionManager.acquireSession(
+                /* playbackLooper= */ checkNotNull(Looper.myLooper()),
+                /* eventDispatcher= */ null,
+                secondFormatWithDrmInitData));
     // The drmSessionManager had to release firstDrmSession in order to acquire secondDrmSession.
     assertThat(firstDrmSession.getState()).isEqualTo(DrmSession.STATE_RELEASED);
 
@@ -195,10 +227,11 @@ public class DefaultDrmSessionManagerTest {
 
     drmSessionManager.prepare();
     DrmSession firstDrmSession =
-        drmSessionManager.acquireSession(
-            /* playbackLooper= */ Assertions.checkNotNull(Looper.myLooper()),
-            /* eventDispatcher= */ null,
-            FORMAT_WITH_DRM_INIT_DATA);
+        checkNotNull(
+            drmSessionManager.acquireSession(
+                /* playbackLooper= */ checkNotNull(Looper.myLooper()),
+                /* eventDispatcher= */ null,
+                FORMAT_WITH_DRM_INIT_DATA));
     waitForOpenedWithKeys(firstDrmSession);
     firstDrmSession.release(/* eventDispatcher= */ null);
 
@@ -207,10 +240,11 @@ public class DefaultDrmSessionManagerTest {
     // Acquire a session for the same init data 5s in to the 10s timeout (so expect the same
     // instance).
     DrmSession secondDrmSession =
-        drmSessionManager.acquireSession(
-            /* playbackLooper= */ Assertions.checkNotNull(Looper.myLooper()),
-            /* eventDispatcher= */ null,
-            FORMAT_WITH_DRM_INIT_DATA);
+        checkNotNull(
+            drmSessionManager.acquireSession(
+                /* playbackLooper= */ checkNotNull(Looper.myLooper()),
+                /* eventDispatcher= */ null,
+                FORMAT_WITH_DRM_INIT_DATA));
     assertThat(secondDrmSession).isSameInstanceAs(firstDrmSession);
 
     // Let the timeout definitely expire, and check the session didn't get released.

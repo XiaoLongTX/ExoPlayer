@@ -204,6 +204,22 @@ public final class SampleQueueTest {
   }
 
   @Test
+  public void peekConsumesDownstreamFormat() {
+    sampleQueue.format(FORMAT_1);
+    clearFormatHolderAndInputBuffer();
+    int result =
+        sampleQueue.peek(
+            formatHolder, inputBuffer, /* formatRequired= */ false, /* loadingFinished= */ false);
+    assertThat(result).isEqualTo(RESULT_FORMAT_READ);
+    // formatHolder should be populated.
+    assertThat(formatHolder.format).isEqualTo(FORMAT_1);
+    result =
+        sampleQueue.peek(
+            formatHolder, inputBuffer, /* formatRequired= */ false, /* loadingFinished= */ false);
+    assertThat(result).isEqualTo(RESULT_NOTHING_READ);
+  }
+
+  @Test
   public void equalFormatsDeduplicated() {
     sampleQueue.format(FORMAT_1);
     assertReadFormat(false, FORMAT_1);
@@ -859,6 +875,53 @@ public final class SampleQueueTest {
     assertThat(sampleQueue.getFirstIndex()).isEqualTo(7);
     assertThat(sampleQueue.getReadIndex()).isEqualTo(8);
     assertAllocationCount(1);
+  }
+
+  @Test
+  public void discardTo_withDuplicateTimestamps_discardsOnlyToFirstMatch() {
+    writeTestData(
+        DATA,
+        SAMPLE_SIZES,
+        SAMPLE_OFFSETS,
+        /* sampleTimestamps= */ new long[] {0, 1000, 1000, 1000, 2000, 2000, 2000, 2000},
+        SAMPLE_FORMATS,
+        /* sampleFlags= */ new int[] {
+          BUFFER_FLAG_KEY_FRAME,
+          0,
+          BUFFER_FLAG_KEY_FRAME,
+          BUFFER_FLAG_KEY_FRAME,
+          0,
+          0,
+          BUFFER_FLAG_KEY_FRAME,
+          BUFFER_FLAG_KEY_FRAME
+        });
+
+    // Discard to first keyframe exactly matching the specified time.
+    sampleQueue.discardTo(
+        /* timeUs= */ 1000, /* toKeyframe= */ true, /* stopAtReadPosition= */ false);
+    assertThat(sampleQueue.getFirstIndex()).isEqualTo(2);
+
+    // Do nothing when trying again.
+    sampleQueue.discardTo(
+        /* timeUs= */ 1000, /* toKeyframe= */ true, /* stopAtReadPosition= */ false);
+    sampleQueue.discardTo(
+        /* timeUs= */ 1000, /* toKeyframe= */ false, /* stopAtReadPosition= */ false);
+    assertThat(sampleQueue.getFirstIndex()).isEqualTo(2);
+
+    // Discard to first frame exactly matching the specified time.
+    sampleQueue.discardTo(
+        /* timeUs= */ 2000, /* toKeyframe= */ false, /* stopAtReadPosition= */ false);
+    assertThat(sampleQueue.getFirstIndex()).isEqualTo(4);
+
+    // Do nothing when trying again.
+    sampleQueue.discardTo(
+        /* timeUs= */ 2000, /* toKeyframe= */ false, /* stopAtReadPosition= */ false);
+    assertThat(sampleQueue.getFirstIndex()).isEqualTo(4);
+
+    // Discard to first keyframe at same timestamp.
+    sampleQueue.discardTo(
+        /* timeUs= */ 2000, /* toKeyframe= */ true, /* stopAtReadPosition= */ false);
+    assertThat(sampleQueue.getFirstIndex()).isEqualTo(6);
   }
 
   @Test
@@ -1578,10 +1641,32 @@ public final class SampleQueueTest {
       byte[] sampleData,
       int offset,
       int length) {
+    // Check that peeks yields the expected values.
     clearFormatHolderAndInputBuffer();
     int result =
+        sampleQueue.peek(
+            formatHolder, inputBuffer, /* formatRequired= */ false, /* loadingFinished= */ false);
+    assertBufferReadResult(
+        result, timeUs, isKeyFrame, isDecodeOnly, isEncrypted, sampleData, offset, length);
+
+    // Check that read yields the expected values.
+    clearFormatHolderAndInputBuffer();
+    result =
         sampleQueue.read(
             formatHolder, inputBuffer, /* formatRequired= */ false, /* loadingFinished= */ false);
+    assertBufferReadResult(
+        result, timeUs, isKeyFrame, isDecodeOnly, isEncrypted, sampleData, offset, length);
+  }
+
+  private void assertBufferReadResult(
+      int result,
+      long timeUs,
+      boolean isKeyFrame,
+      boolean isDecodeOnly,
+      boolean isEncrypted,
+      byte[] sampleData,
+      int offset,
+      int length) {
     assertThat(result).isEqualTo(RESULT_BUFFER_READ);
     // formatHolder should not be populated.
     assertThat(formatHolder.format).isNull();

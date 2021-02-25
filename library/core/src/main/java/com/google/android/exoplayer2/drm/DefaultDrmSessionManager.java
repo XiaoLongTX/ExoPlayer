@@ -36,6 +36,7 @@ import com.google.android.exoplayer2.util.Log;
 import com.google.android.exoplayer2.util.MimeTypes;
 import com.google.android.exoplayer2.util.Util;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
@@ -456,12 +457,14 @@ public class DefaultDrmSessionManager implements DrmSessionManager {
     if (--prepareCallsCount != 0) {
       return;
     }
-    // Make a local copy, because sessions are removed from this.sessions during release (via
-    // callback).
-    List<DefaultDrmSession> sessions = new ArrayList<>(this.sessions);
-    for (int i = 0; i < sessions.size(); i++) {
-      // Release all the keepalive acquisitions.
-      sessions.get(i).release(/* eventDispatcher= */ null);
+    // Release all keepalive acquisitions if keepalive is enabled.
+    if (sessionKeepaliveMs != C.TIME_UNSET) {
+      // Make a local copy, because sessions are removed from this.sessions during release (via
+      // callback).
+      List<DefaultDrmSession> sessions = new ArrayList<>(this.sessions);
+      for (int i = 0; i < sessions.size(); i++) {
+        sessions.get(i).release(/* eventDispatcher= */ null);
+      }
     }
     Assertions.checkNotNull(exoMediaDrm).release();
     exoMediaDrm = null;
@@ -632,12 +635,12 @@ public class DefaultDrmSessionManager implements DrmSessionManager {
       // ResourceBusyException is only available at API 19, so on earlier versions we always
       // eagerly release regardless of the underlying error.
       if (!keepaliveSessions.isEmpty()) {
-        // Make a local copy, because sessions are removed from this.timingOutSessions during
+        // Make a local copy, because sessions are removed from this.keepaliveSessions during
         // release (via callback).
-        ImmutableList<DefaultDrmSession> timingOutSessions =
-            ImmutableList.copyOf(this.keepaliveSessions);
-        for (DrmSession timingOutSession : timingOutSessions) {
-          timingOutSession.release(/* eventDispatcher= */ null);
+        ImmutableSet<DefaultDrmSession> keepaliveSessions =
+            ImmutableSet.copyOf(this.keepaliveSessions);
+        for (DrmSession keepaliveSession : keepaliveSessions) {
+          keepaliveSession.release(/* eventDispatcher= */ null);
         }
         // Undo the acquisitions from createAndAcquireSession().
         session.release(eventDispatcher);

@@ -32,6 +32,7 @@ public final class MimeTypes {
   public static final String BASE_TYPE_VIDEO = "video";
   public static final String BASE_TYPE_AUDIO = "audio";
   public static final String BASE_TYPE_TEXT = "text";
+  public static final String BASE_TYPE_IMAGE = "image";
   public static final String BASE_TYPE_APPLICATION = "application";
 
   public static final String VIDEO_MP4 = BASE_TYPE_VIDEO + "/mp4";
@@ -112,6 +113,8 @@ public final class MimeTypes {
   public static final String APPLICATION_EXIF = BASE_TYPE_APPLICATION + "/x-exif";
   public static final String APPLICATION_ICY = BASE_TYPE_APPLICATION + "/x-icy";
   public static final String APPLICATION_AIT = BASE_TYPE_APPLICATION + "/vnd.dvb.ait";
+
+  public static final String IMAGE_JPEG = BASE_TYPE_IMAGE + "/jpeg";
 
   private static final ArrayList<CustomMimeType> customMimeTypes = new ArrayList<>();
 
@@ -237,6 +240,50 @@ public final class MimeTypes {
       }
     }
     return null;
+  }
+
+  /**
+   * Returns whether the given {@code codecs} string contains a codec which corresponds to the given
+   * {@code mimeType}.
+   *
+   * @param codecs An RFC 6381 codecs string.
+   * @param mimeType A MIME type to look for.
+   * @return Whether the given {@code codecs} string contains a codec which corresponds to the given
+   *     {@code mimeType}.
+   */
+  public static boolean containsCodecsCorrespondingToMimeType(
+      @Nullable String codecs, String mimeType) {
+    return getCodecsCorrespondingToMimeType(codecs, mimeType) != null;
+  }
+
+  /**
+   * Returns a subsequence of {@code codecs} containing the codec strings that correspond to the
+   * given {@code mimeType}. Returns null if {@code mimeType} is null, {@code codecs} is null, or
+   * {@code codecs} does not contain a codec that corresponds to {@code mimeType}.
+   *
+   * @param codecs An RFC 6381 codecs string.
+   * @param mimeType A MIME type to look for.
+   * @return A subsequence of {@code codecs} containing the codec strings that correspond to the
+   *     given {@code mimeType}. Returns null if {@code mimeType} is null, {@code codecs} is null,
+   *     or {@code codecs} does not contain a codec that corresponds to {@code mimeType}.
+   */
+  @Nullable
+  public static String getCodecsCorrespondingToMimeType(
+      @Nullable String codecs, @Nullable String mimeType) {
+    if (codecs == null || mimeType == null) {
+      return null;
+    }
+    String[] codecList = Util.splitCodecs(codecs);
+    StringBuilder builder = new StringBuilder();
+    for (String codec : codecList) {
+      if (mimeType.equals(getMediaMimeType(codec))) {
+        if (builder.length() > 0) {
+          builder.append(",");
+        }
+        builder.append(codec);
+      }
+    }
+    return builder.length() > 0 ? builder.toString() : null;
   }
 
   /**
