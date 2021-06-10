@@ -16,6 +16,7 @@
 package com.google.android.exoplayer2.source.ads;
 
 import static com.google.android.exoplayer2.util.Assertions.checkNotNull;
+import static com.google.android.exoplayer2.util.Assertions.checkState;
 
 import android.net.Uri;
 import android.os.Handler;
@@ -35,6 +36,7 @@ import com.google.android.exoplayer2.source.MediaSource;
 import com.google.android.exoplayer2.source.MediaSource.MediaPeriodId;
 import com.google.android.exoplayer2.source.MediaSourceEventListener;
 import com.google.android.exoplayer2.source.MediaSourceFactory;
+import com.google.android.exoplayer2.ui.AdViewProvider;
 import com.google.android.exoplayer2.upstream.Allocator;
 import com.google.android.exoplayer2.upstream.DataSpec;
 import com.google.android.exoplayer2.upstream.TransferListener;
@@ -51,9 +53,9 @@ import org.checkerframework.checker.nullness.compatqual.NullableType;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 
 /**
- * A {@link MediaSource} that inserts ads linearly with a provided content media source. This source
- * cannot be used as a child source in a composition. It must be the top-level source used to
- * prepare the player.
+ * A {@link MediaSource} that inserts ads linearly into a provided content media source.
+ *
+ * <p>The wrapped content media source must contain a single {@link Timeline.Period}.
  */
 public final class AdsMediaSource extends CompositeMediaSource<MediaPeriodId> {
 
@@ -127,7 +129,7 @@ public final class AdsMediaSource extends CompositeMediaSource<MediaPeriodId> {
   private final MediaSource contentMediaSource;
   private final MediaSourceFactory adMediaSourceFactory;
   private final AdsLoader adsLoader;
-  private final AdsLoader.AdViewProvider adViewProvider;
+  private final AdViewProvider adViewProvider;
   private final DataSpec adTagDataSpec;
   private final Object adsId;
   private final Handler mainHandler;
@@ -159,7 +161,7 @@ public final class AdsMediaSource extends CompositeMediaSource<MediaPeriodId> {
       Object adsId,
       MediaSourceFactory adMediaSourceFactory,
       AdsLoader adsLoader,
-      AdsLoader.AdViewProvider adViewProvider) {
+      AdViewProvider adViewProvider) {
     this.contentMediaSource = contentMediaSource;
     this.adMediaSourceFactory = adMediaSourceFactory;
     this.adsLoader = adsLoader;
@@ -290,6 +292,8 @@ public final class AdsMediaSource extends CompositeMediaSource<MediaPeriodId> {
     if (this.adPlaybackState == null) {
       adMediaSourceHolders = new AdMediaSourceHolder[adPlaybackState.adGroupCount][];
       Arrays.fill(adMediaSourceHolders, new AdMediaSourceHolder[0]);
+    } else {
+      checkState(adPlaybackState.adGroupCount == this.adPlaybackState.adGroupCount);
     }
     this.adPlaybackState = adPlaybackState;
     maybeUpdateAdMediaSources();
@@ -350,12 +354,12 @@ public final class AdsMediaSource extends CompositeMediaSource<MediaPeriodId> {
   private void maybeUpdateSourceInfo() {
     @Nullable Timeline contentTimeline = this.contentTimeline;
     if (adPlaybackState != null && contentTimeline != null) {
-      adPlaybackState = adPlaybackState.withAdDurationsUs(getAdDurationsUs());
-      Timeline timeline =
-          adPlaybackState.adGroupCount == 0
-              ? contentTimeline
-              : new SinglePeriodAdTimeline(contentTimeline, adPlaybackState);
-      refreshSourceInfo(timeline);
+      if (adPlaybackState.adGroupCount == 0) {
+        refreshSourceInfo(contentTimeline);
+      } else {
+        adPlaybackState = adPlaybackState.withAdDurationsUs(getAdDurationsUs());
+        refreshSourceInfo(new SinglePeriodAdTimeline(contentTimeline, adPlaybackState));
+      }
     }
   }
 

@@ -47,7 +47,11 @@ public final class SsaDecoderTest {
   private static final String INVALID_TIMECODES = "media/ssa/invalid_timecodes";
   private static final String INVALID_POSITIONS = "media/ssa/invalid_positioning";
   private static final String POSITIONS_WITHOUT_PLAYRES = "media/ssa/positioning_without_playres";
-  private static final String COLORS = "media/ssa/colors";
+  private static final String STYLE_COLORS = "media/ssa/style_colors";
+  private static final String STYLE_FONT_SIZE = "media/ssa/style_font_size";
+  private static final String STYLE_BOLD_ITALIC = "media/ssa/style_bold_italic";
+  private static final String STYLE_UNDERLINE = "media/ssa/style_underline";
+  private static final String STYLE_STRIKEOUT = "media/ssa/style_strikeout";
 
   @Test
   public void decodeEmpty() throws IOException {
@@ -274,7 +278,7 @@ public final class SsaDecoderTest {
   @Test
   public void decodeColors() throws IOException {
     SsaDecoder decoder = new SsaDecoder();
-    byte[] bytes = TestUtil.getByteArray(ApplicationProvider.getApplicationContext(), COLORS);
+    byte[] bytes = TestUtil.getByteArray(ApplicationProvider.getApplicationContext(), STYLE_COLORS);
     Subtitle subtitle = decoder.decode(bytes, bytes.length, false);
     assertThat(subtitle.getEventTimeCount()).isEqualTo(14);
     // &H000000FF (AABBGGRR) -> #FFFF0000 (AARRGGBB)
@@ -317,6 +321,74 @@ public final class SsaDecoderTest {
         (Spanned) Iterables.getOnlyElement(subtitle.getCues(subtitle.getEventTime(12))).text;
     SpannedSubject.assertThat(seventhCueText)
         .hasNoForegroundColorSpanBetween(0, seventhCueText.length());
+  }
+
+  @Test
+  public void decodeFontSize() throws IOException {
+    SsaDecoder decoder = new SsaDecoder();
+    byte[] bytes =
+        TestUtil.getByteArray(ApplicationProvider.getApplicationContext(), STYLE_FONT_SIZE);
+    Subtitle subtitle = decoder.decode(bytes, bytes.length, false);
+    assertThat(subtitle.getEventTimeCount()).isEqualTo(4);
+
+    Cue firstCue = Iterables.getOnlyElement(subtitle.getCues(subtitle.getEventTime(0)));
+    assertThat(firstCue.textSize).isWithin(1.0e-8f).of(30f / 720f);
+    assertThat(firstCue.textSizeType).isEqualTo(Cue.TEXT_SIZE_TYPE_FRACTIONAL_IGNORE_PADDING);
+    Cue secondCue = Iterables.getOnlyElement(subtitle.getCues(subtitle.getEventTime(2)));
+    assertThat(secondCue.textSize).isWithin(1.0e-8f).of(72.2f / 720f);
+    assertThat(secondCue.textSizeType).isEqualTo(Cue.TEXT_SIZE_TYPE_FRACTIONAL_IGNORE_PADDING);
+  }
+
+  @Test
+  public void decodeBoldItalic() throws IOException {
+    SsaDecoder decoder = new SsaDecoder();
+    byte[] bytes =
+        TestUtil.getByteArray(ApplicationProvider.getApplicationContext(), STYLE_BOLD_ITALIC);
+    Subtitle subtitle = decoder.decode(bytes, bytes.length, false);
+    assertThat(subtitle.getEventTimeCount()).isEqualTo(6);
+
+    Spanned firstCueText =
+        (Spanned) Iterables.getOnlyElement(subtitle.getCues(subtitle.getEventTime(0))).text;
+    SpannedSubject.assertThat(firstCueText).hasBoldSpanBetween(0, firstCueText.length());
+    Spanned secondCueText =
+        (Spanned) Iterables.getOnlyElement(subtitle.getCues(subtitle.getEventTime(2))).text;
+    SpannedSubject.assertThat(secondCueText).hasItalicSpanBetween(0, secondCueText.length());
+    Spanned thirdCueText =
+        (Spanned) Iterables.getOnlyElement(subtitle.getCues(subtitle.getEventTime(4))).text;
+    SpannedSubject.assertThat(thirdCueText).hasBoldItalicSpanBetween(0, thirdCueText.length());
+  }
+
+  @Test
+  public void decodeUnderline() throws IOException {
+    SsaDecoder decoder = new SsaDecoder();
+    byte[] bytes =
+        TestUtil.getByteArray(ApplicationProvider.getApplicationContext(), STYLE_UNDERLINE);
+    Subtitle subtitle = decoder.decode(bytes, bytes.length, false);
+    assertThat(subtitle.getEventTimeCount()).isEqualTo(4);
+
+    Spanned firstCueText =
+        (Spanned) Iterables.getOnlyElement(subtitle.getCues(subtitle.getEventTime(0))).text;
+    SpannedSubject.assertThat(firstCueText).hasUnderlineSpanBetween(0, firstCueText.length());
+    Spanned secondCueText =
+        (Spanned) Iterables.getOnlyElement(subtitle.getCues(subtitle.getEventTime(2))).text;
+    SpannedSubject.assertThat(secondCueText).hasNoUnderlineSpanBetween(0, secondCueText.length());
+  }
+
+  @Test
+  public void decodeStrikeout() throws IOException {
+    SsaDecoder decoder = new SsaDecoder();
+    byte[] bytes =
+        TestUtil.getByteArray(ApplicationProvider.getApplicationContext(), STYLE_STRIKEOUT);
+    Subtitle subtitle = decoder.decode(bytes, bytes.length, false);
+    assertThat(subtitle.getEventTimeCount()).isEqualTo(4);
+
+    Spanned firstCueText =
+        (Spanned) Iterables.getOnlyElement(subtitle.getCues(subtitle.getEventTime(0))).text;
+    SpannedSubject.assertThat(firstCueText).hasStrikethroughSpanBetween(0, firstCueText.length());
+    Spanned secondCueText =
+        (Spanned) Iterables.getOnlyElement(subtitle.getCues(subtitle.getEventTime(2))).text;
+    SpannedSubject.assertThat(secondCueText)
+        .hasNoStrikethroughSpanBetween(0, secondCueText.length());
   }
 
   private static void assertTypicalCue1(Subtitle subtitle, int eventIndex) {

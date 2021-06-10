@@ -292,8 +292,8 @@ public final class SilenceMediaSource extends BaseMediaSource {
 
     @Override
     public int readData(
-        FormatHolder formatHolder, DecoderInputBuffer buffer, boolean formatRequired) {
-      if (!sentFormat || formatRequired) {
+        FormatHolder formatHolder, DecoderInputBuffer buffer, @ReadFlags int readFlags) {
+      if (!sentFormat || (readFlags & FLAG_REQUIRE_FORMAT) != 0) {
         formatHolder.format = FORMAT;
         sentFormat = true;
         return C.RESULT_FORMAT_READ;
@@ -305,12 +305,16 @@ public final class SilenceMediaSource extends BaseMediaSource {
         return C.RESULT_BUFFER_READ;
       }
 
-      int bytesToWrite = (int) min(SILENCE_SAMPLE.length, bytesRemaining);
-      buffer.ensureSpaceForWrite(bytesToWrite);
-      buffer.data.put(SILENCE_SAMPLE, /* offset= */ 0, bytesToWrite);
       buffer.timeUs = getAudioPositionUs(positionBytes);
       buffer.addFlag(C.BUFFER_FLAG_KEY_FRAME);
-      positionBytes += bytesToWrite;
+      int bytesToWrite = (int) min(SILENCE_SAMPLE.length, bytesRemaining);
+      if ((readFlags & FLAG_OMIT_SAMPLE_DATA) == 0) {
+        buffer.ensureSpaceForWrite(bytesToWrite);
+        buffer.data.put(SILENCE_SAMPLE, /* offset= */ 0, bytesToWrite);
+      }
+      if ((readFlags & FLAG_PEEK) == 0) {
+        positionBytes += bytesToWrite;
+      }
       return C.RESULT_BUFFER_READ;
     }
 

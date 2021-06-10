@@ -27,9 +27,11 @@ import androidx.annotation.ColorInt;
 import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
 import com.google.android.exoplayer2.C;
+import com.google.android.exoplayer2.text.Cue;
 import com.google.android.exoplayer2.util.Assertions;
 import com.google.android.exoplayer2.util.Log;
 import com.google.android.exoplayer2.util.Util;
+import com.google.common.base.Ascii;
 import com.google.common.primitives.Ints;
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
@@ -90,12 +92,29 @@ import java.util.regex.Pattern;
   public final String name;
   @SsaAlignment public final int alignment;
   @Nullable @ColorInt public final Integer primaryColor;
+  public final float fontSize;
+  public final boolean bold;
+  public final boolean italic;
+  public final boolean underline;
+  public final boolean strikeout;
 
   private SsaStyle(
-      String name, @SsaAlignment int alignment, @Nullable @ColorInt Integer primaryColor) {
+      String name,
+      @SsaAlignment int alignment,
+      @Nullable @ColorInt Integer primaryColor,
+      float fontSize,
+      boolean bold,
+      boolean italic,
+      boolean underline,
+      boolean strikeout) {
     this.name = name;
     this.alignment = alignment;
     this.primaryColor = primaryColor;
+    this.fontSize = fontSize;
+    this.bold = bold;
+    this.italic = italic;
+    this.underline = underline;
+    this.strikeout = strikeout;
   }
 
   @Nullable
@@ -113,8 +132,27 @@ import java.util.regex.Pattern;
     try {
       return new SsaStyle(
           styleValues[format.nameIndex].trim(),
-          parseAlignment(styleValues[format.alignmentIndex].trim()),
-          parseColor(styleValues[format.primaryColorIndex].trim()));
+          format.alignmentIndex != C.INDEX_UNSET
+              ? parseAlignment(styleValues[format.alignmentIndex].trim())
+              : SSA_ALIGNMENT_UNKNOWN,
+          format.primaryColorIndex != C.INDEX_UNSET
+              ? parseColor(styleValues[format.primaryColorIndex].trim())
+              : null,
+          format.fontSizeIndex != C.INDEX_UNSET
+              ? parseFontSize(styleValues[format.fontSizeIndex].trim())
+              : Cue.DIMEN_UNSET,
+          format.boldIndex != C.INDEX_UNSET
+              ? parseBooleanValue(styleValues[format.boldIndex].trim())
+              : false,
+          format.italicIndex != C.INDEX_UNSET
+              ? parseBooleanValue(styleValues[format.italicIndex].trim())
+              : false,
+          format.underlineIndex != C.INDEX_UNSET
+              ? parseBooleanValue(styleValues[format.underlineIndex].trim())
+              : false,
+          format.strikeoutIndex != C.INDEX_UNSET
+              ? parseBooleanValue(styleValues[format.strikeoutIndex].trim())
+              : false);
     } catch (RuntimeException e) {
       Log.w(TAG, "Skipping malformed 'Style:' line: '" + styleLine + "'", e);
       return null;
@@ -191,6 +229,25 @@ import java.util.regex.Pattern;
     return Color.argb(a, r, g, b);
   }
 
+  private static float parseFontSize(String fontSize) {
+    try {
+      return Float.parseFloat(fontSize);
+    } catch (NumberFormatException e) {
+      Log.w(TAG, "Failed to parse font size: '" + fontSize + "'", e);
+      return Cue.DIMEN_UNSET;
+    }
+  }
+
+  private static boolean parseBooleanValue(String booleanValue) {
+    try {
+      int value = Integer.parseInt(booleanValue);
+      return value == 1 || value == -1;
+    } catch (NumberFormatException e) {
+      Log.w(TAG, "Failed to parse boolean value: '" + booleanValue + "'", e);
+      return false;
+    }
+  }
+
   /**
    * Represents a {@code Format:} line from the {@code [V4+ Styles]} section
    *
@@ -202,12 +259,31 @@ import java.util.regex.Pattern;
     public final int nameIndex;
     public final int alignmentIndex;
     public final int primaryColorIndex;
+    public final int fontSizeIndex;
+    public final int boldIndex;
+    public final int italicIndex;
+    public final int underlineIndex;
+    public final int strikeoutIndex;
     public final int length;
 
-    private Format(int nameIndex, int alignmentIndex, int primaryColorIndex, int length) {
+    private Format(
+        int nameIndex,
+        int alignmentIndex,
+        int primaryColorIndex,
+        int fontSizeIndex,
+        int boldIndex,
+        int italicIndex,
+        int underlineIndex,
+        int strikeoutIndex,
+        int length) {
       this.nameIndex = nameIndex;
       this.alignmentIndex = alignmentIndex;
       this.primaryColorIndex = primaryColorIndex;
+      this.fontSizeIndex = fontSizeIndex;
+      this.boldIndex = boldIndex;
+      this.italicIndex = italicIndex;
+      this.underlineIndex = underlineIndex;
+      this.strikeoutIndex = strikeoutIndex;
       this.length = length;
     }
 
@@ -221,10 +297,15 @@ import java.util.regex.Pattern;
       int nameIndex = C.INDEX_UNSET;
       int alignmentIndex = C.INDEX_UNSET;
       int primaryColorIndex = C.INDEX_UNSET;
+      int fontSizeIndex = C.INDEX_UNSET;
+      int boldIndex = C.INDEX_UNSET;
+      int italicIndex = C.INDEX_UNSET;
+      int underlineIndex = C.INDEX_UNSET;
+      int strikeoutIndex = C.INDEX_UNSET;
       String[] keys =
           TextUtils.split(styleFormatLine.substring(SsaDecoder.FORMAT_LINE_PREFIX.length()), ",");
       for (int i = 0; i < keys.length; i++) {
-        switch (Util.toLowerInvariant(keys[i].trim())) {
+        switch (Ascii.toLowerCase(keys[i].trim())) {
           case "name":
             nameIndex = i;
             break;
@@ -234,10 +315,34 @@ import java.util.regex.Pattern;
           case "primarycolour":
             primaryColorIndex = i;
             break;
+          case "fontsize":
+            fontSizeIndex = i;
+            break;
+          case "bold":
+            boldIndex = i;
+            break;
+          case "italic":
+            italicIndex = i;
+            break;
+          case "underline":
+            underlineIndex = i;
+            break;
+          case "strikeout":
+            strikeoutIndex = i;
+            break;
         }
       }
       return nameIndex != C.INDEX_UNSET
-          ? new Format(nameIndex, alignmentIndex, primaryColorIndex, keys.length)
+          ? new Format(
+              nameIndex,
+              alignmentIndex,
+              primaryColorIndex,
+              fontSizeIndex,
+              boldIndex,
+              italicIndex,
+              underlineIndex,
+              strikeoutIndex,
+              keys.length)
           : null;
     }
   }
