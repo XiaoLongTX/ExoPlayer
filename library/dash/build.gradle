@@ -49,7 +49,6 @@ dependencies {
 ext {
     javadocTitle = 'DASH module'
 }
-apply from: '../../javadoc_library.gradle'
 
 ext {
     releaseArtifact = 'exoplayer-dash'

@@ -47,7 +47,6 @@ dependencies {
 ext {
     javadocTitle = 'Cast extension'
 }
-apply from: '../../javadoc_library.gradle'
 
 ext {
     releaseArtifact = 'extension-cast'

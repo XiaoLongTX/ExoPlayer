@@ -64,6 +64,6 @@ dependencies {
     withExtensionsCompile project(path: modulePrefix + 'extension-flac')
     withExtensionsCompile project(path: modulePrefix + 'extension-ima')
     withExtensionsCompile project(path: modulePrefix + 'extension-opus')
-    withExtensionsCompile project(path: modulePrefix + 'extension-vp9')
+    compile project(path: modulePrefix + 'extension-vp9')
     withExtensionsCompile project(path: modulePrefix + 'extension-rtmp')
 }

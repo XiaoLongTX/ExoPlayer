@@ -1,5 +1,14 @@
 [
   {
+    "name": "maxbian",
+    "samples": [
+      {
+        "name": "testvp9",
+        "uri": "file:///android_asset/test1.mov",
+        "prefer_extension_decoders": true
+      }
+    ]
+  },{
     "name": "YouTube DASH",
     "samples": [
       {

@@ -44,7 +44,6 @@ dependencies {
 ext {
     javadocTitle = 'SmoothStreaming module'
 }
-apply from: '../../javadoc_library.gradle'
 
 ext {
     releaseArtifact = 'exoplayer-smoothstreaming'

@@ -32,7 +32,6 @@ dependencies {
 ext {
     javadocTitle = 'GVR extension'
 }
-apply from: '../../javadoc_library.gradle'
 
 ext {
     releaseArtifact = 'extension-gvr'

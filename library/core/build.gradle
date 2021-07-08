@@ -58,7 +58,6 @@ dependencies {
 ext {
     javadocTitle = 'Core module'
 }
-apply from: '../../javadoc_library.gradle'
 
 ext {
     releaseArtifact = 'exoplayer-core'

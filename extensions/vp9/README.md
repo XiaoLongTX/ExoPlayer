@@ -65,7 +65,7 @@ cd ${VP9_EXT_PATH}/jni && \
 
 ```
 cd "${VP9_EXT_PATH}"/jni && \
-${NDK_PATH}/ndk-build APP_ABI=all -j4
+${NDK_PATH}/ndk-build APP_ABI=arm64-v8a,armeabi-v7a -j4
 ```
 
 [top level README]: https://github.com/google/ExoPlayer/blob/release-v2/README.md

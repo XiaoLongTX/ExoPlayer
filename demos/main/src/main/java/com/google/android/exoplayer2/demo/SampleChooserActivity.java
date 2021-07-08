@@ -229,6 +229,7 @@ public class SampleChooserActivity extends Activity {
             Assertions.checkState(!insidePlaylist,
                 "Invalid attribute on nested item: prefer_extension_decoders");
             preferExtensionDecoders = reader.nextBoolean();
+            Log.i(TAG, "readEntry: prefer_extension_decoders " + preferExtensionDecoders);
             break;
           case "playlist":
             Assertions.checkState(!insidePlaylist, "Invalid nesting of playlists");

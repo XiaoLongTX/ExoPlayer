@@ -39,7 +39,6 @@ dependencies {
 ext {
     javadocTitle = 'OkHttp extension'
 }
-apply from: '../../javadoc_library.gradle'
 
 ext {
     releaseArtifact = 'extension-okhttp'

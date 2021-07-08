@@ -301,7 +301,7 @@ public class PlayerActivity extends Activity
               : DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
               : DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF;
       DefaultRenderersFactory renderersFactory = new DefaultRenderersFactory(this,
-          drmSessionManager, extensionRendererMode);
+          drmSessionManager, DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON);
 
       player = ExoPlayerFactory.newSimpleInstance(renderersFactory, trackSelector);
       player.addListener(new PlayerEventListener());

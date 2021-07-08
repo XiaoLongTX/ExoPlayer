@@ -38,28 +38,8 @@ arch[0]="armeabi-v7a"
 config[0]="--target=armv7-android-gcc --sdk-path=$ndk --enable-neon"
 config[0]+=" --enable-neon-asm"
 
-arch[1]="armeabi"
-config[1]="--target=armv7-android-gcc --sdk-path=$ndk --disable-neon"
-config[1]+=" --disable-neon-asm"
-
-arch[2]="mips"
-config[2]="--force-target=mips32-android-gcc --sdk-path=$ndk"
-
-arch[3]="x86"
-config[3]="--force-target=x86-android-gcc --sdk-path=$ndk --disable-sse2"
-config[3]+=" --disable-sse3 --disable-ssse3 --disable-sse4_1 --disable-avx"
-config[3]+=" --disable-avx2 --enable-pic"
-
-arch[4]="arm64-v8a"
-config[4]="--force-target=armv8-android-gcc --sdk-path=$ndk --enable-neon"
-
-arch[5]="x86_64"
-config[5]="--force-target=x86_64-android-gcc --sdk-path=$ndk --disable-sse2"
-config[5]+=" --disable-sse3 --disable-ssse3 --disable-sse4_1 --disable-avx"
-config[5]+=" --disable-avx2 --enable-pic --disable-neon --disable-neon-asm"
-
-arch[6]="mips64"
-config[6]="--force-target=mips64-android-gcc --sdk-path=$ndk"
+arch[1]="arm64-v8a"
+config[1]="--force-target=armv8-android-gcc --sdk-path=$ndk --enable-neon"
 
 limit=$((${#arch[@]} - 1))
 
